@@ -18,8 +18,10 @@ func (m *Manager) CheckActive(leaseID string) error {
 	if lease.Expired(m.now()) {
 		return model.ErrLeaseInvalid
 	}
-	info := m.nodes.Get(lease.NodeID)
-	if !info.Active {
+	// 使用 Lookup 而非 Get：节点未注册时 Get 返回 nil，
+	// 直接解引用 info.Active 会 panic。缺失节点按未注册处理。
+	info, ok := m.nodes.Lookup(lease.NodeID)
+	if !ok || !info.Active {
 		return model.ErrNodeMissing
 	}
 	return nil

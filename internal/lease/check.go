@@ -12,6 +12,11 @@ func (m *Manager) CheckActive(leaseID string) error {
 	if !ok {
 		return model.ErrLeaseInvalid
 	}
+	// 租约必须处于 granted 状态且尚未到期；否则签发会越过已观测的
+	// lastEnd/lastTS 基线继续发号，产出回退的序号与时间戳，破坏下游单调排序。
+	if !lease.IsActive(m.now()) {
+		return model.ErrLeaseInvalid
+	}
 	info, found := m.nodes.Lookup(lease.NodeID)
 	if !found || !info.Active {
 		return model.ErrNodeMissing
@@ -20,15 +25,13 @@ func (m *Manager) CheckActive(leaseID string) error {
 }
 
 // ValidHolder 校验指定节点是否为该租约当前持有者。
-// 用于签发链路二次确认，防止转移后的旧节点继续发号。
+// 用于签发链路二次确认，防止转移或过期后的旧节点继续发号：
+// 租约必须处于 granted 状态、未到期，且持有者与入参一致。
 func (m *Manager) ValidHolder(leaseID, nodeID string) error {
 	m.mu.Lock()
 	lease, ok := m.leases[leaseID]
 	m.mu.Unlock()
-	if !ok || lease.State != model.LeaseGranted {
-		return model.ErrLeaseInvalid
-	}
-	if lease.NodeID != nodeID {
+	if !ok || !lease.IsActive(m.now()) || lease.NodeID != nodeID {
 		return model.ErrLeaseInvalid
 	}
 	return nil

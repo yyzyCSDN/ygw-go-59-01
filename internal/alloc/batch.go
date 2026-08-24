@@ -16,14 +16,14 @@ func (p *RangePool) BatchAlloc(count uint64) (*model.IssuedBatch, error) {
 		return nil, model.ErrRangeExhausted
 	}
 	from := r.Next
-	to := from + count
-	r.Next = to
+	end := from + count - 1
+	r.Next = end + 1
 	if r.IsExhausted() {
 		r.MarkExhausted()
 	} else {
 		r.MarkDraining()
 	}
-	return model.NewIssuedBatch(r.ID, from, to, model.HLCTime{}), nil
+	return model.NewIssuedBatch(r.ID, from, end, model.HLCTime{}), nil
 }
 
 // Remaining 返回当前区间剩余可分配数量。
